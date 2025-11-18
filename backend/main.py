@@ -1,4 +1,3 @@
-
 """
 パートナーAI - バックエンドコア
 FastAPI + Ollama + SQLite
@@ -301,7 +300,9 @@ async def chat(req: ChatRequest):
             conversation_id=conv_id,
             response=ai_response,
             model_used=req.model,
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
+            reason=reason,
+            tags=tags
         )
         
     except Exception as e:
@@ -346,7 +347,7 @@ async def get_history(user_id: str, limit: int = 50):
         c = conn.cursor()
         
         c.execute("""
-            SELECT id, timestamp, user_message, ai_response, model_used, rating
+            SELECT id, timestamp, user_message, ai_response, model_used, rating, metadata
             FROM conversations
             WHERE user_id = ?
             ORDER BY timestamp DESC
@@ -358,13 +359,17 @@ async def get_history(user_id: str, limit: int = 50):
         
         conversations = []
         for row in rows:
+            metadata = json.loads(row[6]) if row[6] else {}
+            
             conversations.append({
                 "id": row[0],
                 "timestamp": row[1],
                 "user_message": row[2],
                 "ai_response": row[3],
                 "model_used": row[4],
-                "rating": row[5]
+                "rating": row[5],
+                "tags": metadata.get("tags", []),
+                "reason": metadata.get("reason", "")
             })
         
         return HistoryResponse(
@@ -433,33 +438,18 @@ async def submit_feedback(req: FeedbackRequest):
 async def list_models():
     """利用可能なモデル一覧"""
     try:
-        result = ollama.list()
-        models = []
-        # ListResponseオブジェクトから直接modelsを取得
-        model_list = result.models if hasattr(result, 'models') else []
-
-        for m in model_list:
-            # Modelオブジェクトから属性を取得
-            name = m.model if hasattr(m, 'model') else str(m)
-            size = m.size if hasattr(m, 'size') else 0
-
-            # 詳細情報を取得
-            details = m.details if hasattr(m, 'details') else None
-            param_size = details.parameter_size if details and hasattr(details, 'parameter_size') else ''
-            quant = details.quantization_level if details and hasattr(details, 'quantization_level') else ''
-            models.append({
-                "name": name,
-                "size": size,
-                "size_gb": round(size / (1024**3), 1),
-                "parameter_size": param_size,
-                "quantization": quant
-            })
-        return {"models": models}
-
+        models = ollama.list()
+        return {
+            "models": [
+                {
+                    "name": m["name"],
+                    "size": m["size"],
+                    "modified": m.get("modified_at", "")
+                }
+                for m in models.get("models", [])
+            ]
+        }
     except Exception as e:
-        print(f"❌ エラー: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/stats/{user_id}")
@@ -502,14 +492,79 @@ async def get_stats(user_id: str):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
 @app.get("/api/profile/{user_id}")
-async def get_profile(user_id: str):
+async def get_profile_endpoint(user_id: str):
     """ユーザープロファイル取得"""
     try:
         profile = get_user_profile(user_id)
+        
+        # RAGの記憶数を追加
+        memory_count = rag_system.get_memory_count(user_id)
+        profile["rag_memories"] = memory_count
+        
         return {"profile": profile}
     except Exception as e:
+        print(f"❌ プロファイル取得エラー: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/improve/{user_id}")
+async def trigger_improvement(user_id: str):
+    """手動で自己改良を実行"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        improvement_system = SelfImprovementSystem(conn)
+        
+        improvements = improvement_system.analyze_feedback(user_id)
+        updated_profile = improvement_system.apply_improvements(user_id, improvements)
+        
+        conn.close()
+        
+        return {
+            "status": "success",
+            "improvements": improvements,
+            "updated_profile": updated_profile
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/conversation/{conversation_id}/tags")
+async def update_conversation_tags(conversation_id: int, tags: List[str]):
+    """会話のタグを更新"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # 現在のメタデータを取得
+        c.execute("SELECT metadata FROM conversations WHERE id = ?", (conversation_id,))
+        row = c.fetchone()
+        
+        if row:
+            metadata = json.loads(row[0]) if row[0] else {}
+        else:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        # タグを更新
+        metadata["tags"] = tags
+        
+        # 保存
+        c.execute("""
+            UPDATE conversations
+            SET metadata = ?
+            WHERE id = ?
+        """, (json.dumps(metadata, ensure_ascii=False), conversation_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return {"status": "success", "tags": tags}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ==================== 起動 ====================
 
 if __name__ == "__main__":

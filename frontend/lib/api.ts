@@ -28,6 +28,8 @@ export interface Conversation {
   ai_response: string;
   model_used: string;
   rating: number | null;
+  tags?: string[];
+  reason?: string;
 }
 
 export interface HistoryResponse {
@@ -97,5 +99,10 @@ export const api = {
     } catch {
       return false;
     }
+  },
+
+  // 会話のタグを更新
+  async updateConversationTags(conversationId: number, tags: string[]): Promise<void> {
+    await axios.post(`${API_BASE_URL}/api/conversation/${conversationId}/tags`, tags);
   }
 };
