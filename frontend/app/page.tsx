@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Settings, History, BarChart3, User } from 'lucide-react';
+import { Send, Loader2, Settings, History, BarChart3, User, Sparkles } from 'lucide-react';
 import ChatMessage from '@/components/ChatMessage';
 import HistoryView from '@/components/HistoryView';
 import StatsView from '@/components/StatsView';
 import ProfileView from '@/components/ProfileView';
+import FineTunePanel from '@/components/FineTunePanel';
 import { api, type ChatRequest } from '@/lib/api';
 
 interface Message {
@@ -24,7 +25,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState('qwen2.5:32b');
   const [models, setModels] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<'chat' | 'history' | 'stats' | 'profile'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'history' | 'stats' | 'profile' | 'finetune'>('chat');
+  const [hasCustomModel, setHasCustomModel] = useState(false);
+  const [customModelName, setCustomModelName] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const userId = 'demo_user'; // 固定ユーザーID
@@ -76,8 +79,24 @@ export default function Home() {
       }
     };
 
+    const checkCustomModel = async () => {
+      try {
+        const result = await api.getActiveCustomModel(userId);
+        setHasCustomModel(result.has_custom_model);
+        setCustomModelName(result.model_name);
+        
+        // カスタムモデルがあればモデルリストに追加
+        if (result.model_name && !models.includes(result.model_name)) {
+          setModels(prev => [result.model_name!, ...prev]);
+        }
+      } catch (error) {
+        console.error('カスタムモデル確認エラー:', error);
+      }
+    };
+
     fetchModels();
     loadHistory();
+    checkCustomModel();
   }, []);
 
   // メッセージ送信
@@ -188,6 +207,20 @@ export default function Home() {
               プロファイル
             </button>
             <button
+              onClick={() => setActiveTab('finetune')}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition relative ${
+                activeTab === 'finetune'
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              カスタムAI
+              {hasCustomModel && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab('history')}
               className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
                 activeTab === 'history'
@@ -232,6 +265,14 @@ export default function Home() {
                       <p className="text-gray-600">
                         何でも聞いてください。一緒に成長していきましょう！
                       </p>
+                      {hasCustomModel && customModelName && (
+                        <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-100 to-indigo-100 rounded-lg">
+                          <Sparkles className="w-4 h-4 text-purple-600" />
+                          <span className="text-sm text-purple-800 font-medium">
+                            カスタムモデル利用可能
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -261,11 +302,20 @@ export default function Home() {
                     onChange={(e) => setSelectedModel(e.target.value)}
                     className="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {models.map(model => (
-                      <option key={model} value={model}>
-                        {model}
-                      </option>
-                    ))}
+                    {hasCustomModel && customModelName && (
+                      <optgroup label="カスタムモデル">
+                        <option value={customModelName}>
+                          ✨ {customModelName} (あなた専用)
+                        </option>
+                      </optgroup>
+                    )}
+                    <optgroup label="標準モデル">
+                      {models.filter(m => m !== customModelName).map(model => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                   <span className="text-xs text-gray-500">
                     {loading ? '応答中...' : '準備完了'}
@@ -301,6 +351,11 @@ export default function Home() {
           {/* プロファイルタブ */}
           {activeTab === 'profile' && (
             <ProfileView userId={userId} />
+          )}
+
+          {/* ファインチューニングタブ */}
+          {activeTab === 'finetune' && (
+            <FineTunePanel userId={userId} />
           )}
 
           {/* 履歴タブ */}

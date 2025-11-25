@@ -15,6 +15,7 @@ import os
 from analyzer import ConversationAnalyzer, ProfileManager
 from rag_system import RAGSystem, SelfImprovementSystem
 from finetuning import FineTuningSystem
+from pydantic import BaseModel
 
 # FastAPIアプリ初期化
 app = FastAPI(title="パートナーAI API")
@@ -583,19 +584,159 @@ async def update_conversation_tags(conversation_id: int, tags: List[str]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class FineTuneRequest(BaseModel):
+    base_model: str = "qwen2.5:32b"
+
+class ModelListResponse(BaseModel):
+    models: List[Dict]
+
 @app.post("/api/finetune/{user_id}")
-async def trigger_finetuning(user_id: str, base_model: str = "gemma3:12b"):
-    """ユーザー専用モデルを作成"""
+async def trigger_finetuning(user_id: str, req: FineTuneRequest):
+    """
+    ユーザー専用モデルを作成
+    
+    最低20件の高評価会話が必要
+    """
     try:
         tuning_system = FineTuningSystem()
-        model_name = tuning_system.fine_tune(user_id, base_model)
+        
+        # データ件数チェック
+        training_data = tuning_system.collect_training_data(user_id)
+        
+        if len(training_data) < 20:
+            return {
+                "status": "insufficient_data",
+                "message": f"データが不足しています。現在{len(training_data)}件、最低20件必要です。",
+                "current_count": len(training_data),
+                "required_count": 20
+            }
+        
+        # ファインチューニング実行（非同期処理推奨）
+        model_name = tuning_system.fine_tune(user_id, req.base_model)
+        
         return {
             "status": "success",
             "model_name": model_name,
-            "message": f"ファインチューニング完了: {model_name}"
+            "message": f"ファインチューニング完了: {model_name}",
+            "training_size": len(training_data)
         }
+        
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ ファインチューニングエラー: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/finetune/{user_id}/models", response_model=ModelListResponse)
+async def list_custom_models(user_id: str):
+    """ユーザーが作成したカスタムモデル一覧"""
+    try:
+        tuning_system = FineTuningSystem()
+        models = tuning_system.list_user_models(user_id)
+        
+        return ModelListResponse(models=models)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/finetune/{user_id}/active")
+async def get_active_custom_model(user_id: str):
+    """現在アクティブなカスタムモデルを取得"""
+    try:
+        tuning_system = FineTuningSystem()
+        model_name = tuning_system.get_active_model(user_id)
+        
+        if model_name:
+            return {
+                "has_custom_model": True,
+                "model_name": model_name
+            }
+        else:
+            return {
+                "has_custom_model": False,
+                "model_name": None
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/finetune/{user_id}/models/{model_name}")
+async def delete_custom_model(user_id: str, model_name: str):
+    """カスタムモデルを削除"""
+    try:
+        tuning_system = FineTuningSystem()
+        tuning_system.delete_model(user_id, model_name)
+        
+        return {
+            "status": "success",
+            "message": f"モデル {model_name} を削除しました"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/finetune/{user_id}/evaluate")
+async def evaluate_custom_model(
+    user_id: str,
+    model_name: str,
+    test_prompts: List[str] = ["こんにちは", "調子はどう？", "何か面白い話ある？"]
+):
+    """カスタムモデルを評価"""
+    try:
+        tuning_system = FineTuningSystem()
+        evaluation = tuning_system.evaluate_model(model_name, test_prompts)
+        
+        return evaluation
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/finetune/{user_id}/readiness")
+async def check_finetuning_readiness(user_id: str):
+    """
+    ファインチューニングの準備状況をチェック
+    
+    必要な条件:
+    - 最低20件の会話
+    - うち高評価（3以上）が15件以上
+    """
+    try:
+        tuning_system = FineTuningSystem()
+        training_data = tuning_system.collect_training_data(user_id)
+        
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # 総会話数
+        c.execute("""
+            SELECT COUNT(*) FROM conversations WHERE user_id = ?
+        """, (user_id,))
+        total_count = c.fetchone()[0]
+        
+        # 高評価数
+        c.execute("""
+            SELECT COUNT(*) FROM conversations 
+            WHERE user_id = ? AND rating >= 3
+        """, (user_id,))
+        high_rated_count = c.fetchone()[0]
+        
+        conn.close()
+        
+        ready = len(training_data) >= 20
+        
+        return {
+            "ready": ready,
+            "total_conversations": total_count,
+            "high_rated_conversations": high_rated_count,
+            "usable_for_training": len(training_data),
+            "required": 20,
+            "progress_percentage": min(100, (len(training_data) / 20) * 100)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== 起動 ====================
 

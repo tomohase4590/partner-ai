@@ -106,3 +106,113 @@ export const api = {
     await axios.post(`${API_BASE_URL}/api/conversation/${conversationId}/tags`, tags);
   }
 };
+
+// ファインチューニング関連の型定義
+export interface FineTuneReadiness {
+  ready: boolean;
+  total_conversations: number;
+  high_rated_conversations: number;
+  usable_for_training: number;
+  required: number;
+  progress_percentage: number;
+}
+
+export interface CustomModel {
+  model_name: string;
+  base_model: string;
+  training_size: number;
+  created_at: string;
+  is_active: boolean;
+}
+
+export interface CustomModelsResponse {
+  models: CustomModel[];
+}
+
+export interface FineTuneResponse {
+  status: string;
+  message: string;
+  model_name?: string;
+  training_size?: number;
+  current_count?: number;
+  required_count?: number;
+}
+
+// API関数に追加
+export const api = {
+  // ... 既存の関数 ...
+
+  // ファインチューニング準備状況
+  async getFineTuneReadiness(userId: string): Promise<FineTuneReadiness> {
+    const response = await fetch(`${API_BASE}/api/finetune/${userId}/readiness`);
+    if (!response.ok) throw new Error('準備状況の取得に失敗しました');
+    return response.json();
+  },
+
+  // カスタムモデル一覧
+  async getCustomModels(userId: string): Promise<CustomModelsResponse> {
+    const response = await fetch(`${API_BASE}/api/finetune/${userId}/models`);
+    if (!response.ok) throw new Error('モデル一覧の取得に失敗しました');
+    return response.json();
+  },
+
+  // アクティブなカスタムモデル取得
+  async getActiveCustomModel(userId: string): Promise<{ has_custom_model: boolean; model_name: string | null }> {
+    const response = await fetch(`${API_BASE}/api/finetune/${userId}/active`);
+    if (!response.ok) throw new Error('アクティブモデルの取得に失敗しました');
+    return response.json();
+  },
+
+  // ファインチューニング実行
+  async createFineTunedModel(userId: string, baseModel: string): Promise<FineTuneResponse> {
+    const response = await fetch(`${API_BASE}/api/finetune/${userId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ base_model: baseModel }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'ファインチューニングに失敗しました');
+    }
+    return response.json();
+  },
+
+  // カスタムモデル削除
+  async deleteCustomModel(userId: string, modelName: string): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${API_BASE}/api/finetune/${userId}/models/${modelName}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('モデルの削除に失敗しました');
+    return response.json();
+  },
+
+  // カスタムモデル評価
+  async evaluateCustomModel(
+    userId: string,
+    modelName: string,
+    testPrompts?: string[]
+  ): Promise<{
+    model_name: string;
+    success_rate: number;
+    total_tests: number;
+    successful_tests: number;
+    results: Array<{
+      prompt: string;
+      response?: string;
+      error?: string;
+      success: boolean;
+    }>;
+  }> {
+    const response = await fetch(`${API_BASE}/api/finetune/${userId}/evaluate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ model_name: modelName, test_prompts: testPrompts }),
+    });
+    if (!response.ok) throw new Error('モデル評価に失敗しました');
+    return response.json();
+  },
+};
