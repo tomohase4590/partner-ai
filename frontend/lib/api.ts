@@ -5,7 +5,7 @@ import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:8000';
 
-// 型定義
+// 基本型定義
 export interface ChatRequest {
   user_id: string;
   message: string;
@@ -54,8 +54,41 @@ export interface ModelsResponse {
   models: Model[];
 }
 
-// APIクライアント
+// ファインチューニング関連の型定義
+export interface FineTuneReadiness {
+  ready: boolean;
+  total_conversations: number;
+  high_rated_conversations: number;
+  usable_for_training: number;
+  required: number;
+  progress_percentage: number;
+}
+
+export interface CustomModel {
+  model_name: string;
+  base_model: string;
+  training_size: number;
+  created_at: string;
+  is_active: boolean;
+}
+
+export interface CustomModelsResponse {
+  models: CustomModel[];
+}
+
+export interface FineTuneResponse {
+  status: string;
+  message: string;
+  model_name?: string;
+  training_size?: number;
+  current_count?: number;
+  required_count?: number;
+}
+
+// APIクライアント（統合版）
 export const api = {
+  // ==================== 基本機能 ====================
+  
   // チャット送信
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
     const response = await axios.post(`${API_BASE_URL}/api/chat`, request);
@@ -104,88 +137,44 @@ export const api = {
   // 会話のタグを更新
   async updateConversationTags(conversationId: number, tags: string[]): Promise<void> {
     await axios.post(`${API_BASE_URL}/api/conversation/${conversationId}/tags`, tags);
-  }
-};
+  },
 
-// ファインチューニング関連の型定義
-export interface FineTuneReadiness {
-  ready: boolean;
-  total_conversations: number;
-  high_rated_conversations: number;
-  usable_for_training: number;
-  required: number;
-  progress_percentage: number;
-}
-
-export interface CustomModel {
-  model_name: string;
-  base_model: string;
-  training_size: number;
-  created_at: string;
-  is_active: boolean;
-}
-
-export interface CustomModelsResponse {
-  models: CustomModel[];
-}
-
-export interface FineTuneResponse {
-  status: string;
-  message: string;
-  model_name?: string;
-  training_size?: number;
-  current_count?: number;
-  required_count?: number;
-}
-
-// API関数に追加
-export const api = {
-  // ... 既存の関数 ...
+  // ==================== ファインチューニング機能 ====================
 
   // ファインチューニング準備状況
   async getFineTuneReadiness(userId: string): Promise<FineTuneReadiness> {
-    const response = await fetch(`${API_BASE}/api/finetune/${userId}/readiness`);
-    if (!response.ok) throw new Error('準備状況の取得に失敗しました');
-    return response.json();
+    const response = await axios.get(`${API_BASE_URL}/api/finetune/${userId}/readiness`);
+    return response.data;
   },
 
   // カスタムモデル一覧
   async getCustomModels(userId: string): Promise<CustomModelsResponse> {
-    const response = await fetch(`${API_BASE}/api/finetune/${userId}/models`);
-    if (!response.ok) throw new Error('モデル一覧の取得に失敗しました');
-    return response.json();
+    const response = await axios.get(`${API_BASE_URL}/api/finetune/${userId}/models`);
+    return response.data;
   },
 
   // アクティブなカスタムモデル取得
   async getActiveCustomModel(userId: string): Promise<{ has_custom_model: boolean; model_name: string | null }> {
-    const response = await fetch(`${API_BASE}/api/finetune/${userId}/active`);
-    if (!response.ok) throw new Error('アクティブモデルの取得に失敗しました');
-    return response.json();
+    const response = await axios.get(`${API_BASE_URL}/api/finetune/${userId}/active`);
+    return response.data;
   },
 
   // ファインチューニング実行
   async createFineTunedModel(userId: string, baseModel: string): Promise<FineTuneResponse> {
-    const response = await fetch(`${API_BASE}/api/finetune/${userId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ base_model: baseModel }),
-    });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'ファインチューニングに失敗しました');
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/finetune/${userId}`, {
+        base_model: baseModel
+      });
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.detail || 'ファインチューニングに失敗しました');
     }
-    return response.json();
   },
 
   // カスタムモデル削除
   async deleteCustomModel(userId: string, modelName: string): Promise<{ status: string; message: string }> {
-    const response = await fetch(`${API_BASE}/api/finetune/${userId}/models/${modelName}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) throw new Error('モデルの削除に失敗しました');
-    return response.json();
+    const response = await axios.delete(`${API_BASE_URL}/api/finetune/${userId}/models/${modelName}`);
+    return response.data;
   },
 
   // カスタムモデル評価
@@ -205,14 +194,10 @@ export const api = {
       success: boolean;
     }>;
   }> {
-    const response = await fetch(`${API_BASE}/api/finetune/${userId}/evaluate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ model_name: modelName, test_prompts: testPrompts }),
+    const response = await axios.post(`${API_BASE_URL}/api/finetune/${userId}/evaluate`, {
+      model_name: modelName,
+      test_prompts: testPrompts
     });
-    if (!response.ok) throw new Error('モデル評価に失敗しました');
-    return response.json();
+    return response.data;
   },
 };
