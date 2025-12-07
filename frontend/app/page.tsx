@@ -8,6 +8,7 @@ import StatsView from '@/components/StatsView';
 import ProfileView from '@/components/ProfileView';
 import FineTunePanel from '@/components/FineTunePanel';
 import DashboardView from '@/components/DashboardView';
+import AIMessageNotification from '@/components/AIMessageNotification';
 import { api, type ChatRequest } from '@/lib/api';
 
 
@@ -233,78 +234,91 @@ export default function Home() {
               <p className="text-sm text-gray-500">あなたと共に成長するAI</p>
             </div>
           </div>
-
-          {/* タブナビゲーション */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
-                activeTab === 'chat'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <Send className="w-4 h-4" />
-              チャット
-            </button>
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
-                activeTab === 'profile'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              プロファイル
-            </button>
-            <button
-              onClick={() => setActiveTab('finetune')}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition relative ${
-                activeTab === 'finetune'
-                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              カスタムAI
-              {hasCustomModel && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
-                activeTab === 'history'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              履歴
-            </button>
-            <button
-              onClick={() => setActiveTab('stats')}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
-                activeTab === 'stats'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              統計
-            </button>
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
-                activeTab === 'dashboard'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              ダッシュボード
-            </button>
+          <div className="flex items-center gap-4">
+            <AIMessageNotification userId={userId} />
+            {/* タブナビゲーション */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveTab('chat')}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
+                  activeTab === 'chat'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Send className="w-4 h-4" />
+                チャット
+              </button>
+              <button
+                onClick={() => setActiveTab('chat')}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
+                  activeTab === 'chat'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Send className="w-4 h-4" />
+                チャット
+              </button>
+              <button
+                onClick={() => setActiveTab('profile')}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
+                  activeTab === 'profile'
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <User className="w-4 h-4" />
+                プロファイル
+              </button>
+              <button
+                onClick={() => setActiveTab('finetune')}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition relative ${
+                  activeTab === 'finetune'
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" />
+                カスタムAI
+                {hasCustomModel && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
+                  activeTab === 'history'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <History className="w-4 h-4" />
+                履歴
+              </button>
+              <button
+                onClick={() => setActiveTab('stats')}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
+                  activeTab === 'stats'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                統計
+              </button>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition ${
+                  activeTab === 'dashboard'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                ダッシュボード
+              </button>
+            </div>
           </div>
         </div>
       </header>

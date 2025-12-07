@@ -1646,6 +1646,73 @@ async def delete_goal(goal_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+
+
+@app.post("/api/messages/{user_id}/test-trigger")
+async def test_trigger_messages(user_id: str):
+    """
+    テスト用：AIメッセージを即座に生成
+    開発時のテスト用なので、本番では削除推奨
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conversation_initiator.conn = conn
+        
+        # 朝のチェックインを生成
+        morning_msg = conversation_initiator.generate_morning_checkin(user_id)
+        morning_id = conversation_initiator.queue_message(
+            user_id=user_id,
+            message_type=morning_msg['type'],
+            priority=morning_msg['priority'],
+            content=morning_msg['content'],
+            scheduled_time=datetime.now().isoformat()
+        )
+        conversation_initiator.mark_message_sent(morning_id)
+        
+        # 夜の振り返りを生成
+        evening_msg = conversation_initiator.generate_evening_reflection(user_id)
+        evening_id = conversation_initiator.queue_message(
+            user_id=user_id,
+            message_type=evening_msg['type'],
+            priority=evening_msg['priority'],
+            content=evening_msg['content'],
+            scheduled_time=datetime.now().isoformat()
+        )
+        conversation_initiator.mark_message_sent(evening_id)
+        
+        # タスクリマインダーを生成（タスクがあれば）
+        schedule_manager.conn = conn
+        tasks = schedule_manager.get_pending_tasks(user_id)
+        
+        if tasks:
+            task = tasks[0]
+            reminder_msg = conversation_initiator.generate_task_reminder(user_id, task)
+            reminder_id = conversation_initiator.queue_message(
+                user_id=user_id,
+                message_type=reminder_msg['type'],
+                priority=reminder_msg['priority'],
+                content=reminder_msg['content'],
+                scheduled_time=datetime.now().isoformat()
+            )
+            conversation_initiator.mark_message_sent(reminder_id)
+        
+        conn.close()
+        conversation_initiator.conn = None
+        schedule_manager.conn = None
+        
+        return {
+            "status": "success",
+            "message": "テストメッセージを生成しました",
+            "generated_count": 3 if tasks else 2
+        }
+        
+    except Exception as e:
+        print(f"❌ テストメッセージ生成エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 # ==================== 起動 ====================
 
 if __name__ == "__main__":
