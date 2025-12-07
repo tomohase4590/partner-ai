@@ -12,8 +12,9 @@ from datetime import datetime
 from typing import List, Dict
 import ollama
 
-# パスを追加
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+# パスを追加（backend/ディレクトリを参照）
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BACKEND_DIR)
 
 from analyzer import ConversationAnalyzer, ProfileManager
 from rag_system import RAGSystem

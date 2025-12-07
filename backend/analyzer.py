@@ -225,3 +225,32 @@ class ProfileManager:
                 prompt += f"- {pref}\n"
         
         return prompt
+    
+class EmotionDetector:
+    """感情・心理状態の検出"""
+    
+    def detect_emotion_details(self, user_message: str, conversation_history: List[Dict]) -> Dict:
+        """
+        深い感情分析
+        - 表面的な感情(happy/sad)だけでなく
+        - 期待、不安、疲労、興奮などの微細な感情
+        - 会話の文脈から推測される心理状態
+        """
+        
+        prompt = f"""以下のユーザーメッセージと会話履歴から、ユーザーの感情と心理状態を分析してください。
+
+現在のメッセージ: {user_message}
+
+最近の会話履歴:
+{self._format_history(conversation_history)}
+
+以下のJSON形式で返してください:
+{{
+  "primary_emotion": "happy/sad/anxious/excited/tired/frustrated/curious/neutral",
+  "emotion_intensity": 1-10,
+  "underlying_needs": ["承認", "サポート", "情報", "共感"],
+  "preferred_response_style": "励まし/具体的アドバイス/共感/簡潔な回答",
+  "energy_level": "high/medium/low",
+  "conversation_goal": "雑談/問題解決/学習/愚痴"
+}}
+"""

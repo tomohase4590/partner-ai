@@ -5,7 +5,8 @@ import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:8000';
 
-// 基本型定義
+// ==================== 基本型定義 ====================
+
 export interface ChatRequest {
   user_id: string;
   message: string;
@@ -54,7 +55,8 @@ export interface ModelsResponse {
   models: Model[];
 }
 
-// ファインチューニング関連の型定義
+// ==================== ファインチューニング関連の型定義 ====================
+
 export interface FineTuneReadiness {
   ready: boolean;
   total_conversations: number;
@@ -85,7 +87,50 @@ export interface FineTuneResponse {
   required_count?: number;
 }
 
-// APIクライアント（統合版）
+// ==================== スケジュール・タスク・習慣関連の型定義 (新規追加) ====================
+
+export interface Schedule {
+  id: number;
+  title: string;
+  description?: string;
+  start_time: string;
+  end_time?: string;
+  location?: string;
+  status: string;
+}
+
+export interface Task {
+  id: number;
+  title: string;
+  description?: string;
+  due_date?: string;
+  priority: 'high' | 'medium' | 'low';
+  estimated_minutes?: number;
+  status: string;
+}
+
+export interface Habit {
+  id: number;
+  title: string;
+  frequency: string;
+  current_streak: number;
+  last_completed?: string;
+}
+
+export interface DashboardData {
+  schedules: Schedule[];
+  urgent_tasks: Task[];
+  due_today: Task[];
+  free_time_slots: Array<{
+    start: string;
+    end: string;
+    duration_minutes: number;
+  }>;
+  recommendation: string;
+}
+
+
+// ==================== APIクライアント（統合版） ====================
 export const api = {
   // ==================== 基本機能 ====================
   
@@ -200,4 +245,101 @@ export const api = {
     });
     return response.data;
   },
+
+  // ==================== スケジュール・タスク・習慣機能 (新規追加) ====================
+
+  // ダッシュボード情報（今日の予定・タスク・AI提案）の取得
+  async getDailyPlan(userId: string): Promise<DashboardData> {
+    const response = await axios.get(`${API_BASE_URL}/api/dashboard/${userId}`);
+    return response.data;
+  },
+
+  // 習慣リストの取得
+  async getHabits(userId: string): Promise<{ habits: Habit[] }> {
+    const response = await axios.get(`${API_BASE_URL}/api/habits/${userId}`);
+    return response.data;
+  },
+
+  // 習慣の完了チェック
+  async completeHabit(userId: string, habitId: number): Promise<{ status: string; updated: boolean }> {
+    const response = await axios.post(`${API_BASE_URL}/api/habits/${userId}/${habitId}/complete`);
+    return response.data;
+  },
+
+  // スケジュールの作成（必要に応じて使用）
+  async createSchedule(userId: string, data: Partial<Schedule>): Promise<{ status: string; schedule_id: number }> {
+    const response = await axios.post(`${API_BASE_URL}/api/schedules/${userId}`, data);
+    return response.data;
+  },
+
+  // lib/api.ts に以下を追加
+
+  // ==================== スケジュール管理 ====================
+
+  // スケジュール一覧取得
+  async getSchedules(userId: string, days: number = 7): Promise<{ schedules: Schedule[]; total: number }> {
+    const response = await axios.get(`${API_BASE_URL}/api/schedules/${userId}`, {
+      params: { days }
+    });
+    return response.data;
+  },
+
+  // スケジュール更新
+  async updateSchedule(scheduleId: number, data: Partial<Schedule>): Promise<{ status: string; message: string }> {
+    const response = await axios.put(`${API_BASE_URL}/api/schedules/${scheduleId}`, data);
+    return response.data;
+  },
+
+  // スケジュール削除
+  async deleteSchedule(scheduleId: number): Promise<{ status: string; message: string }> {
+    const response = await axios.delete(`${API_BASE_URL}/api/schedules/${scheduleId}`);
+    return response.data;
+  },
+
+  // ==================== タスク管理 ====================
+
+  // タスク一覧取得
+  async getTasks(userId: string): Promise<{ tasks: Task[]; total: number }> {
+    const response = await axios.get(`${API_BASE_URL}/api/tasks/${userId}`);
+    return response.data;
+  },
+
+  // タスク更新
+  async updateTask(taskId: number, data: Partial<Task>): Promise<{ status: string; message: string }> {
+    const response = await axios.put(`${API_BASE_URL}/api/tasks/${taskId}`, data);
+    return response.data;
+  },
+
+  // タスク完了
+  async completeTask(taskId: number): Promise<{ status: string; completed: boolean }> {
+    const response = await axios.post(`${API_BASE_URL}/api/tasks/${taskId}/complete`);
+    return response.data;
+  },
+
+  // タスク削除
+  async deleteTask(taskId: number): Promise<{ status: string; message: string }> {
+    const response = await axios.delete(`${API_BASE_URL}/api/tasks/${taskId}`);
+    return response.data;
+  },
+
+  // ==================== 目標管理 ====================
+
+  // 目標一覧取得
+  async getGoals(userId: string): Promise<{ goals: Array<any>; total: number }> {
+    const response = await axios.get(`${API_BASE_URL}/api/goals/${userId}`);
+    return response.data;
+  },
+
+  // 目標更新
+  async updateGoal(goalId: number, data: any): Promise<{ status: string; message: string }> {
+    const response = await axios.put(`${API_BASE_URL}/api/goals/${goalId}`, data);
+    return response.data;
+  },
+
+  // 目標削除
+  async deleteGoal(goalId: number): Promise<{ status: string; message: string }> {
+    const response = await axios.delete(`${API_BASE_URL}/api/goals/${goalId}`);
+    return response.data;
+  }
 };
+

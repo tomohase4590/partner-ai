@@ -249,6 +249,9 @@ class FineTuningSystem:
             user_id, profile, training_data
         )
         
+        # システムプロンプトのエスケープ処理
+        system_prompt_escaped = system_prompt.replace('"""', r'\"\"\"')
+        
         # Modelfileの内容を生成
         modelfile_content = f"""FROM {base_model}
 
@@ -258,9 +261,7 @@ class FineTuningSystem:
 # Training samples: {len(training_data)}
 # Base model: {base_model}
 
-SYSTEM \"\"\"
-{system_prompt}
-\"\"\"
+SYSTEM \"\"\"{system_prompt_escaped}\"\"\"
 
 PARAMETER temperature 0.8
 PARAMETER top_p 0.9
@@ -278,11 +279,15 @@ PARAMETER stop "</s>"
             modelfile_content += "\n# Few-shot examples\n"
             for example in examples:
                 # エスケープ処理
-                user_text = example['user'].replace('"""', '\\"\\"\\"')
-                assistant_text = example['assistant'].replace('"""', '\\"\\"\\"')
+                user_text = example['user'].replace('"""', r'\"\"\"').replace('\n', ' ')
+                assistant_text = example['assistant'].replace('"""', r'\"\"\"').replace('\n', ' ')
                 
-                modelfile_content += f'MESSAGE user """{user_text}"""\n'
-                modelfile_content += f'MESSAGE assistant """{assistant_text}"""\n'
+                # 長さ制限
+                user_text = user_text[:200]
+                assistant_text = assistant_text[:300]
+                
+                modelfile_content += f'MESSAGE user \"\"\"{user_text}\"\"\"\n'
+                modelfile_content += f'MESSAGE assistant \"\"\"{assistant_text}\"\"\"\n'
         
         return modelfile_content
     
@@ -316,9 +321,9 @@ PARAMETER stop "</s>"
         print(f"✅ トレーニングデータ: {len(training_data)}件")
         
         # 2. Modelfile作成
-        modelfile_content = self.create_modelfile(base_model, user_id, training_data)
+        modelfile_content = self.create_modelfile(user_id, base_model, training_data)
         
-        # Modelfileを保存（デバッグ用）
+        # Modelfileを保存（デバッグ用 + コマンド実行用）
         modelfile_path = os.path.join(
             self.modelfiles_dir,
             f"{user_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.Modelfile"
@@ -336,12 +341,25 @@ PARAMETER stop "</s>"
             print(f"🚀 モデル作成中: {model_name}")
             print("   (数分かかる場合があります...)")
             
-            # ollama.create()を使用
-            ollama.create(
-                model=model_name,
-                modelfile=modelfile_content
+            # デバッグ: Modelfileの内容を確認
+            print(f"   Modelfile先頭200文字: {modelfile_content[:200]}")
+            
+            # ollama.create()を使用（path指定で読み込み）
+            # 一時ファイルから読み込ませる方法に変更
+            import subprocess
+            
+            result = subprocess.run(
+                ["ollama", "create", model_name, "-f", modelfile_path],
+                capture_output=True,
+                text=True,
+                timeout=300
             )
             
+            if result.returncode != 0:
+                raise RuntimeError(f"モデル作成失敗: {result.stderr}")
+            
+            # 結果を確認
+            print(f"   作成結果: {result.stdout}")
             print(f"✅ モデル作成完了: {model_name}")
             
             # 5. メタデータを保存
@@ -351,8 +369,12 @@ PARAMETER stop "</s>"
             
             return model_name
             
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("モデル作成がタイムアウトしました")
         except Exception as e:
             print(f"❌ モデル作成エラー: {e}")
+            print(f"デバッグ情報: Modelfile内容の最初の200文字:")
+            print(modelfile_content[:200])
             raise RuntimeError(f"モデル作成エラー: {str(e)}")
     
     def _save_model_metadata(

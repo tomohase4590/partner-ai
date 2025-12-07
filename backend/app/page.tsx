@@ -10,7 +10,6 @@ import FineTunePanel from '@/components/FineTunePanel';
 import DashboardView from '@/components/DashboardView';
 import { api, type ChatRequest } from '@/lib/api';
 
-
 interface Message {
   role: 'user' | 'assistant';
   content: string;

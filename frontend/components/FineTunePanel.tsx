@@ -30,6 +30,14 @@ interface FineTunePanelProps {
   userId: string;
 }
 
+// 💡 追加: BaseModelOption の型定義
+interface BaseModelOption {
+  value: string;
+  label: string;
+  description: string;
+  installed?: boolean;
+}
+
 export default function FineTunePanel({ userId }: FineTunePanelProps) {
   const [readiness, setReadiness] = useState<ReadinessStatus | null>(null);
   const [models, setModels] = useState<CustomModel[]>([]);
@@ -37,11 +45,51 @@ export default function FineTunePanel({ userId }: FineTunePanelProps) {
   const [status, setStatus] = useState<string>('');
   const [selectedBaseModel, setSelectedBaseModel] = useState('qwen2.5:32b');
 
+  const [availableBaseModels, setAvailableBaseModels] = useState<BaseModelOption[]>([]);
   // データ取得
   useEffect(() => {
     loadReadiness();
     loadModels();
+    loadAvailableModels();
   }, [userId]);
+
+  // 💡 追加: 利用可能なモデルリストをロードする関数
+  const loadAvailableModels = async () => {
+    try {
+      // バックエンドの /api/models エンドポイントからインストール済みモデルを取得
+      const response = await api.getModels(); 
+      
+      const installedModels: BaseModelOption[] = response.models
+        .filter(m => !m.name.includes('_custom_')) // カスタムモデルを除外
+        .map(m => {
+          // Ollamaのレスポンスを BaseModelOption の形式に変換
+          const label = `${m.name} (${m.size_gb}GB)`;
+          const description = `${m.parameter_size || 'Unknown'} パラメータ`;
+          
+          return {
+            value: m.name,
+            label: label,
+            description: description,
+            installed: true,
+          };
+        });
+      
+      if (installedModels.length > 0) {
+        setAvailableBaseModels(installedModels);
+        
+        // デフォルトモデルを設定（存在すればリストの先頭）
+        setSelectedBaseModel(installedModels[0].value);
+      } else {
+        // モデルがない場合のフォールバック（例：固定のメッセージを表示するモデルなど）
+        setAvailableBaseModels([{ value: 'none', label: '利用可能なモデルなし', description: 'Ollamaにモデルをインストールしてください' }]);
+        setSelectedBaseModel('none');
+      }
+    } catch (error) {
+      console.error('利用可能なモデルの取得に失敗:', error);
+      // サーバーエラー時のフォールバック
+      setAvailableBaseModels([{ value: 'fallback', label: 'モデル取得エラー', description: 'バックエンドを確認してください' }]);
+    }
+  };
 
   const loadReadiness = async () => {
     try {
@@ -217,12 +265,23 @@ export default function FineTunePanel({ userId }: FineTunePanelProps) {
               value={selectedBaseModel}
               onChange={(e) => setSelectedBaseModel(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              disabled={loading}
+              disabled={loading || availableBaseModels.length === 0 || selectedBaseModel === 'none'}
             >
-              <option value="gemma3:4b">Gemma 3 4B (軽量・高速)</option>
-              <option value="gemma3:12b">Gemma 3 12B (バランス)</option>
-              <option value="qwen2.5:32b">Qwen 2.5 32B (高性能)</option>
+              {/* 💡 修正箇所: 固定値を削除し、動的なリストでレンダリング */}
+              {availableBaseModels.map(model => (
+                <option key={model.value} value={model.value}>
+                  {model.label}
+                </option>
+              ))}
             </select>
+            
+            {/* 💡 追加: 選択されたモデルの説明を表示 */}
+            {selectedBaseModel && selectedBaseModel !== 'none' && (
+              <p className="text-sm text-gray-500 mt-2">
+                💡 {availableBaseModels.find(m => m.value === selectedBaseModel)?.description}
+              </p>
+            )}
+
             <p className="text-sm text-gray-500 mt-2">
               💡 軽量モデルは応答が速く、大型モデルはより高度な理解が可能です
             </p>
